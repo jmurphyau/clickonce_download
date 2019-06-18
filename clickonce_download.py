@@ -10,6 +10,9 @@ import hashlib
 import requests
 from tqdm import tqdm
 
+
+# xpath cheatsheet: https://devhints.io/xpath
+
 class MissingArgumentError(ValueError):
     pass
 
@@ -36,14 +39,20 @@ def extract_manifest_info(xml):
 def fetch_manifest(url):
     return fetch_url(url)
 
+def assembly_elem_to_dict(elem):
+    digest_elem = elem.find('.//{http://www.w3.org/2000/09/xmldsig#}DigestValue')
+    return {'url_path': elem.get('codebase'), 'size': elem.get('size'), 'digest': digest_elem.text}
+
 def file_element_to_dict(elem):
     digest_elem = elem.find('.//{http://www.w3.org/2000/09/xmldsig#}DigestValue')
     return {'url_path': elem.get('name'), 'size': elem.get('size'), 'digest': digest_elem.text}
 
 def extract_files(xml):
     tree = ET.fromstring(xml)
+    assembly_el = tree.find(".//{urn:schemas-microsoft-com:asm.v2}dependentAssembly[@dependencyType='install']")
+    assembly_dict = assembly_elem_to_dict(assembly_el)
     file_els = tree.findall('.//{urn:schemas-microsoft-com:asm.v2}file')
-    return [file_element_to_dict(f) for f in file_els]
+    return [assembly_dict] + [file_element_to_dict(f) for f in file_els]
 
 def check_dir(file_path):
     if not os.path.exists(os.path.dirname(file_path)):
