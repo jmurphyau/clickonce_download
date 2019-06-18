@@ -1,0 +1,9 @@
+lib/
+bin/
+include/
+build/
+dist/
+clickonce_download.egg-info/
+pip-selfcheck.json
+pyvenv.cfg
+download/
