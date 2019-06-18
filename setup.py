@@ -13,7 +13,7 @@ def main():
         author='jmurphyau',
         description='Downloads files referenced from a click once .application file',
         url='https://github.com/jmurphyau/clickonce_download',
-        version='1.0.0',
+        version='1.0.1',
         python_requires='>=3.7.0',
         install_requires=get_requirements('requirements.txt'),
         scripts=['clickonce_download.py'],
