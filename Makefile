@@ -2,7 +2,7 @@ all: clean setup dist build
 
 setup:
 	python3 -m venv .
-	bin/pip3 install --upgrade pip setuptools
+	bin/pip3 install --upgrade pip setuptools wheel
 
 build:
 	bin/python3 setup.py build
