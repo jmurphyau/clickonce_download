@@ -10,6 +10,12 @@ import hashlib
 import requests
 from tqdm import tqdm
 
+xmldsig_algo = {
+    'http://www.w3.org/2000/09/xmldsig#sha256': 'sha256',
+    'http://www.w3.org/2000/09/xmldsig#sha1': 'sha1'
+}
+
+digest_impl = dict(sha1=hashlib.sha1, sha256=hashlib.sha256)
 
 # xpath cheatsheet: https://devhints.io/xpath
 
@@ -33,19 +39,28 @@ def extract_manifest_info(xml):
     tree = ET.fromstring(xml)
     dependency_el = tree.find('.//{urn:schemas-microsoft-com:asm.v2}dependency')
     assembly_el = dependency_el.find('.//{urn:schemas-microsoft-com:asm.v2}dependentAssembly')
+    digest_method_el = assembly_el.find('.//{http://www.w3.org/2000/09/xmldsig#}DigestMethod')
     digest_el = assembly_el.find('.//{http://www.w3.org/2000/09/xmldsig#}DigestValue')
-    return {'url_path': assembly_el.get('codebase'), 'digest': digest_el.text}
+    return {'url_path': assembly_el.get('codebase'), 'digest': digest_el.text,
+            'digest_algo': xmldsig_algo[ digest_method_el.get('Algorithm') ]
+            }
 
 def fetch_manifest(url):
     return fetch_url(url)
 
 def assembly_elem_to_dict(elem):
+    digest_method_elem = elem.find('.//{http://www.w3.org/2000/09/xmldsig#}DigestMethod')
     digest_elem = elem.find('.//{http://www.w3.org/2000/09/xmldsig#}DigestValue')
-    return {'url_path': elem.get('codebase'), 'size': elem.get('size'), 'digest': digest_elem.text}
+    return {'url_path': elem.get('codebase'), 'size': elem.get('size'), 'digest': digest_elem.text,
+            'digest_algo': xmldsig_algo[ digest_method_elem.get('Algorithm') ]
+            }
 
 def file_element_to_dict(elem):
+    digest_method_elem = elem.find('.//{http://www.w3.org/2000/09/xmldsig#}DigestMethod')
     digest_elem = elem.find('.//{http://www.w3.org/2000/09/xmldsig#}DigestValue')
-    return {'url_path': elem.get('name'), 'size': elem.get('size'), 'digest': digest_elem.text}
+    return {'url_path': elem.get('name'), 'size': elem.get('size'), 'digest': digest_elem.text,
+            'digest_algo': xmldsig_algo[ digest_method_elem.get('Algorithm') ]
+            }
 
 def extract_files(xml):
     tree = ET.fromstring(xml)
@@ -58,14 +73,14 @@ def check_dir(file_path):
     if not os.path.exists(os.path.dirname(file_path)):
         os.makedirs(os.path.dirname(file_path), exist_ok=True)
 
-def download_file(download_path, manifest_url, url_path, size, digest):
+def download_file(download_path, manifest_url, url_path, size, digest, digest_algo):
     url = '{0}.deploy'.format(urljoin(manifest_url, fix_url_path(url_path)))
 
     file_path = os.path.join(download_path, fix_fs_path(url_path))
 
     check_dir(file_path)
 
-    sha1 = hashlib.sha1()
+    hash = digest_impl[digest_algo]()
 
     with open(file_path, "wb") as handle:
         res = requests.get(url, stream=True)
@@ -73,9 +88,9 @@ def download_file(download_path, manifest_url, url_path, size, digest):
         with tqdm(desc=file_path, total=file_size, unit='B', unit_scale=True, unit_divisor=1024, dynamic_ncols=True) as pbar:
             for data in res.iter_content():
                 handle.write(data)
-                sha1.update(data)
+                hash.update(data)
                 pbar.update(len(data))
-    downloaded_digest = b64encode(sha1.digest()).decode()
+    downloaded_digest = b64encode(hash.digest()).decode()
     if downloaded_digest != digest:
         raise Exception("Error validating {0} (downloaded digest {1} doesn't match expected digest {2})".format(file_path, downloaded_digest, digest))
 
